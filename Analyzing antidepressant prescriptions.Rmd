@@ -1,0 +1,886 @@
+---
+title: "ADJ_Final project"
+output: html_notebook
+---
+
+Topic: Prescriptions of SSRIs (in this analysis, fluoxetine, citalopram, and sertraline, commonly known as Prozac, Zoloft, and Celexa) in Missouri
+Data:
+(1) Medicare Part D Prescribers - by Geography and Drug (by state and national)
+(URL: https://data.cms.gov/provider-summary-by-type-of-service/medicare-part-d-prescribers/medicare-part-d-prescribers-by-geography-and-drug)
+(2) Medicare Part D Prescribers - by Provider and Drug (filter by the three drugs*)
+(URL: https://data.cms.gov/provider-summary-by-type-of-service/medicare-part-d-prescribers/medicare-part-d-prescribers-by-provider-and-drug)
+Time period: 2019, 2020, 2021
+Download time: Mar. 21, 2024
+
+*I downloaded this dataset after filtering by generic drug names (Advanced search: Gnrc_Name CONTAINS fluoxetine, citalopram, or sertraline). Without doing so, the dataset will be too big.
+
+```{r}
+library(tidyverse)
+library(tidycensus)
+```
+
+```{r}
+geo2019 <- read.csv("data/Medicare_Part_D_Prescribers_by_Geography_and_Drug_2019.csv")
+geo2020 <- read.csv("data/Medicare_Part_D_Prescribers_by_Geography_and_Drug_2020.csv")
+geo2021 <- read.csv("data/Medicare_Part_D_Prescribers_by_Geography_and_Drug_2021.csv")
+
+provider2019 <- read.csv("data/Medicare_Part_D_Prescribers_by_Provider_and_Drug_2019.csv")
+provider2020 <- read.csv("data/Medicare_Part_D_Prescribers_by_Provider_and_Drug_2020.csv")
+provider2021 <- read.csv("data/Medicare_Part_D_Prescribers_by_Provider_and_Drug_2021.csv")
+```
+
+Merging the datasets after adding a year column:
+```{r}
+geo2019 <- geo2019 %>% 
+  mutate(Year = 2019)
+geo2020 <- geo2020 %>% 
+  mutate(Year = 2020)
+geo2021 <- geo2021 %>% 
+  mutate(Year = 2021)
+
+geo <- rbind(geo2021, geo2020, geo2019)
+
+provider2019 <- provider2019 %>% 
+  mutate(Year = 2019)
+provider2020 <- provider2020 %>% 
+  mutate(Year = 2020)
+provider2021 <- provider2021 %>% 
+  mutate(Year = 2021)
+
+provider <- rbind(provider2021, provider2020, provider2019)
+```
+
+The geography and provider datasets both have columns indicating states but they're written in different ways. I created a new column for the geography dataset to make sure I can join it with the provider dataset,
+```{r}
+geo %>% 
+  distinct(Prscrbr_Geo_Desc)
+
+geo <- geo %>% mutate(Prscrbr_State_Abrvtn = case_when(
+    Prscrbr_Geo_Desc == "Alabama" ~ "AL",
+    Prscrbr_Geo_Desc == "Alaska" ~ "AK",
+    Prscrbr_Geo_Desc == "Arizona" ~ "AZ",
+    Prscrbr_Geo_Desc == "Arkansas" ~ "AR",
+    Prscrbr_Geo_Desc == "American Samoa" ~ "AS",
+    Prscrbr_Geo_Desc == "California" ~ "CA",
+    Prscrbr_Geo_Desc == "Colorado" ~ "CO",
+    Prscrbr_Geo_Desc == "Connecticut" ~ "CT",
+    Prscrbr_Geo_Desc == "Delaware" ~ "DE",
+    Prscrbr_Geo_Desc == "District of Columbia" ~ "DC",
+    Prscrbr_Geo_Desc == "Florida" ~ "FL",
+    Prscrbr_Geo_Desc == "Georgia" ~ "GA",
+    Prscrbr_Geo_Desc == "Guam" ~ "GU",
+    Prscrbr_Geo_Desc == "Hawaii" ~ "HI",
+    Prscrbr_Geo_Desc == "Idaho" ~ "ID",
+    Prscrbr_Geo_Desc == "Illinois" ~ "IL",
+    Prscrbr_Geo_Desc == "Indiana" ~ "IN",
+    Prscrbr_Geo_Desc == "Iowa" ~ "IA",
+    Prscrbr_Geo_Desc == "Kansas" ~ "KS",
+    Prscrbr_Geo_Desc == "Kentucky" ~ "KY",
+    Prscrbr_Geo_Desc == "Louisiana" ~ "LA",
+    Prscrbr_Geo_Desc == "Maine" ~ "ME",
+    Prscrbr_Geo_Desc == "Maryland" ~ "MD",
+    Prscrbr_Geo_Desc == "Massachusetts" ~ "MA",
+    Prscrbr_Geo_Desc == "Michigan" ~ "MI",
+    Prscrbr_Geo_Desc == "Minnesota" ~ "MN",
+    Prscrbr_Geo_Desc == "Mississippi" ~ "MS",
+    Prscrbr_Geo_Desc == "Missouri" ~ "MO",
+    Prscrbr_Geo_Desc == "Montana" ~ "MT",
+    Prscrbr_Geo_Desc == "Nebraska" ~ "NE",
+    Prscrbr_Geo_Desc == "Nevada" ~ "NV",
+    Prscrbr_Geo_Desc == "New Hampshire" ~ "NH",
+    Prscrbr_Geo_Desc == "New Jersey" ~ "NJ",
+    Prscrbr_Geo_Desc == "New Mexico" ~ "NM",
+    Prscrbr_Geo_Desc == "New York" ~ "NY",
+    Prscrbr_Geo_Desc == "North Carolina" ~ "NC",
+    Prscrbr_Geo_Desc == "North Dakota" ~ "ND",
+    Prscrbr_Geo_Desc == "Northern Mariana Islands" ~ "MP",
+    Prscrbr_Geo_Desc == "Ohio" ~ "OH",
+    Prscrbr_Geo_Desc == "Oklahoma" ~ "OK",
+    Prscrbr_Geo_Desc == "Oregon" ~ "OR",
+    Prscrbr_Geo_Desc == "Pennsylvania" ~ "PA",
+    Prscrbr_Geo_Desc == "Puerto Rico" ~ "PR",
+    Prscrbr_Geo_Desc == "Rhode Island" ~ "RI",
+    Prscrbr_Geo_Desc == "South Carolina" ~ "SC",
+    Prscrbr_Geo_Desc == "South Dakota" ~ "SD",
+    Prscrbr_Geo_Desc == "Tennessee" ~ "TN",
+    Prscrbr_Geo_Desc == "Texas" ~ "TX",
+    Prscrbr_Geo_Desc == "Utah" ~ "UT",
+    Prscrbr_Geo_Desc == "Vermont" ~ "VT",
+    Prscrbr_Geo_Desc == "Virgin Islands" ~ "VI",
+    Prscrbr_Geo_Desc == "Virginia" ~ "VA",
+    Prscrbr_Geo_Desc == "Washington" ~ "WA",
+    Prscrbr_Geo_Desc == "West Virginia" ~ "WV",
+    Prscrbr_Geo_Desc == "Wisconsin" ~ "WI",
+    Prscrbr_Geo_Desc == "Wyoming" ~ "WY",
+    TRUE ~ NA
+  ))
+```
+
+##Assessing data:
+1. What is a row?
+(1) In the geography dataset, a row is how much a certain drug was prescribed either in a state or nationally in a given year. 
+(2) In the provider dataset, a row is how much a certain provider (individual or organization) in a certain state prescribes a certain drug.
+
+2. Checking data columns:
+
+- Brnd_Name (brand name) = the trademarked name of the drug
+- Gnrc_Name (generic name) = the chemical ingredient of the drug
+For example, Prozac is a brand name, and its generic name is "Fluoxetine Hcl." However, "Fluoxetine Hcl" can sometimes be a brand name (meaning it's unbranded), and many drugs can contain "Fluoxetine Hcl." An example is "Olanzapine/Fluoxetine Hcl," which is a generic name.
+
+```{r}
+geo %>% 
+  select(Brnd_Name, Gnrc_Name) %>% 
+  filter(stringr::str_detect(Gnrc_Name, "Fluoxetine")) %>% 
+  distinct(Gnrc_Name)
+
+geo %>% 
+  select(Brnd_Name, Gnrc_Name) %>% 
+  filter(stringr::str_detect(Gnrc_Name, "Citalopram")) %>% 
+  distinct(Gnrc_Name)
+
+geo %>% 
+  select(Brnd_Name, Gnrc_Name) %>% 
+  filter(stringr::str_detect(Gnrc_Name, "Sertraline")) %>% 
+  distinct(Gnrc_Name)
+```
+
+I wanted to make sure if, for example, only psychiatrists prescribe "Prozac," and other doctors prescribe "Fluoxetine Hcl":
+```{r}
+provider %>% 
+  filter(Brnd_Name == "Prozac") %>% 
+  select(Brnd_Name, Gnrc_Name, Prscrbr_Type)
+
+provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl") %>% 
+  select(Brnd_Name, Gnrc_Name, Prscrbr_Type)
+
+provider %>% 
+  filter(Brnd_Name == "Zoloft") %>% 
+  select(Brnd_Name, Gnrc_Name, Prscrbr_Type)
+
+provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl") %>% 
+  select(Brnd_Name, Gnrc_Name, Prscrbr_Type)
+
+provider %>% 
+  filter(Brnd_Name == "Celexa") %>% 
+  select(Brnd_Name, Gnrc_Name, Prscrbr_Type)
+
+provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide") %>% 
+  select(Brnd_Name, Gnrc_Name, Prscrbr_Type)
+```
+
+There doesn't seem to be a rule for doctors of a certain specialty to prescribe these SSRIs in a certain way. So in my analysis, to identify Prozac, I search for Fluoxetine Hcl in generic name (excluding Olanzapine/Fluoxetine Hcl, which is much less prescribed than Fluoxetine Hcl). For Zoloft, Gnrc_Name = Sertraline Hcl. For Celexa, Gnrc_Name = Citalopram Hydrobromide.
+
+Other columns:
+- Tot_Drug_Cst (Total Drug Cost) = the aggregate drug cost paid for all associated claims, and includes includes ingredient cost, dispensing fee, sales tax, and any applicable vaccine administration fees. 
+- Tot_Day_Supply = the aggregate number of day’s supply for which this drug was dispensed.
+- GE65 = beneficiaries age 65 and older
+- LIS = low income subsidy
+For example, LIS_Bene_Cst_Shr = the total cost that beneficiaries using a drug, with a low-income subsidy, paid during the year.
+- Prscrbr_NPI (only in provider dataset) = unique identifier for the provider. I'll use this to identify providers so I don't have to worry about names.
+
+3. Checking datatypes:
+23 columns in the geo dataset (12 number columns that could be used for calculation) and 23 columns in the provider dataset (10 number columns that could be used for calculation).
+
+4. Checking nulls:
+```{r}
+colSums(is.na(geo))
+```
+Nulls found in Tot_Benes, GE65_Tot_Clms, GE65_Tot_30day_Fills,  GE65_Tot_Drug_Cst, GE65_Tot_Benes. All these columns, according to the data dictionary, can be suppressed. For total beneficiaries, counts fewer than 11 are suppressed. For GE65 columns, reasons for suppression are described the column, "GE65_Bene_Sprsn_Flag."
+
+```{r}
+colSums(is.na(provider))
+```
+Nulls found in Tot_Benes, GE65_Tot_Clms, GE65_Tot_30day_Fills, GE65_Tot_Drug_Cst, GE65_Tot_Day_Suply, and GE65_Tot_Benes. Reasons for supression of data in GE65 columns, again, are described the column, "GE65_Bene_Sprsn_Flag." This is one of the caveats for the analysis.
+
+##Analysis:
+
+1. How many claims for SSRIs were made each year in Missouri? Did things change during Covid?
+```{r}
+provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Clms))
+
+provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Clms))
+
+provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Clms))
+```
+Not much changed during the pandemic. But there's a slight increase in the claims for Sertraline (Zoloft). For these tables I also learned that Zoloft is the most prescribed among the three SSRIs, followed by Celexa and then Prozac.
+
+```{r}
+provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Day_Suply))
+
+provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Day_Suply))
+
+provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide", Prscrbr_State_Abrvtn == "MO") %>%
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Day_Suply))
+```
+Based on total days of supply, again, Zoloft>Celexa>Prozac.
+
+2. Who (doctors of what specialties) prescribed these SSRIs?
+```{r}
+provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Prscrbr_Type) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Prscrbr_Type) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Prscrbr_Type) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+```
+In the past three years, these SSRIs were most likely prescribed in family practice physicians, internal medicine physicians, and nurse practitioners. Psychiatrists were most likely to prescribe Prozac and Zoloft than Celexa.
+
+What about nationally?
+```{r}
+provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl") %>% 
+  group_by(Prscrbr_Type) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl") %>% 
+  group_by(Prscrbr_Type) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide") %>% 
+  group_by(Prscrbr_Type) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+```
+Again, these drugs were most likely prescribed in family practice physicians, internal medicine physicians, and nurse practitioners.
+
+Factoring in years:
+```{r}
+provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year, Prscrbr_Type) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year, Prscrbr_Type) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year, Prscrbr_Type) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+```
+I wanted to see if there were major changes in the three years by specialty. But the results were pretty much consistent.
+
+3. In what cities were these SSRIs prescribed?
+```{r}
+provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl", Prscrbr_State_Abrvtn == "MO") %>%
+  group_by(Prscrbr_City) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl", Prscrbr_State_Abrvtn == "MO") %>%
+  group_by(Prscrbr_City) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide", Prscrbr_State_Abrvtn == "MO") %>%
+  group_by(Prscrbr_City) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+```
+More claims made in more populated areas.
+
+4. Who (which doctors) were prescribing SSRIs in Missouri and nationally? 
+(1) Prozac 
+```{r}
+df1 <- provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl", Prscrbr_State_Abrvtn == "MO") %>%
+  group_by(Prscrbr_NPI) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+dictionary <- provider %>% 
+  distinct(Prscrbr_NPI, Prscrbr_State_Abrvtn, Prscrbr_City, Prscrbr_Type)
+
+full_join(df1, dictionary, by = "Prscrbr_NPI")
+```
+Naveed Mirza of Poplar Bluff (Prscrbr_NPI == "1619079795"; Psychiatry), Eric Barnes of Columbia (Prscrbr_NPI == "1619952520"; Geriatric Medicine), and Fernando Cavero	of Sparta/Springfield	(Prscrbr_NPI == "1669545711"; Internal Medicine) prescribed more Prozac than any other doctors in Missouri.
+
+Taking a look at each of these doctors (in order):
+```{r}
+provider %>% 
+  filter(Prscrbr_NPI == "1619079795" & Gnrc_Name == "Fluoxetine Hcl") %>%
+  select(Year, Tot_Clms, Tot_Day_Suply, GE65_Tot_Clms, GE65_Tot_Day_Suply, GE65_Tot_Benes, Year) %>% 
+  arrange(Year)
+
+provider %>% 
+  filter(Prscrbr_NPI == "1619952520" & Gnrc_Name == "Fluoxetine Hcl") %>%
+  select(Year, Tot_Clms, Tot_Day_Suply, GE65_Tot_Clms, GE65_Tot_Day_Suply, GE65_Tot_Benes, Year) %>% 
+  arrange(Year)
+
+provider %>% 
+  filter(Prscrbr_NPI == "1669545711" & Gnrc_Name == "Fluoxetine Hcl") %>%
+  select(Year, Tot_Clms, Tot_Day_Suply, GE65_Tot_Clms, GE65_Tot_Day_Suply, GE65_Tot_Benes, Year) %>% 
+  arrange(Year)
+```
+From tot_clms, we can see a decline in prescriptions by Naveed Mirza and Eric Barnes, but a sharp increase by Fernando Cavero. Also it' interesting that Fernando Cavero (Internal Medicine) prescribes much more fluoxetine than Eric Barnes (Geriatric Medicine) to the elderly.
+
+(2) Zoloft
+```{r}
+df2 <- provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl", Prscrbr_State_Abrvtn == "MO") %>%
+  group_by(Prscrbr_NPI) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+full_join(df2, dictionary, by = "Prscrbr_NPI")
+```
+Eric Barnes of Columbia (Prscrbr_NPI == "1619952520"; Geriatric Medicine), Srinath Tadakamalla of Harrisonville	(Prscrbr_NPI == "1184691305"; Family Practice), Dennis	Drews of Columbia	(Prscrbr_NPI == "1972614519"; Internal Medicine) were the top three prescribers in Missouri. With Lewis Meyerson	(Prscrbr_NPI == "1568560720") of Columbia/Troy (Family Practice) came in fourth. Three top prescribers (of different specialties) were in Columbia.
+
+Taking a further look at those doctors:
+```{r}
+provider %>% 
+  filter(Prscrbr_NPI == "1619952520" & Gnrc_Name == "Sertraline Hcl") %>%
+  select(Year, Tot_Clms, GE65_Tot_Clms, GE65_Tot_Benes, Year) %>% 
+  arrange(desc(Tot_Clms))
+
+provider %>% 
+  filter(Prscrbr_NPI == "1184691305" & Gnrc_Name == "Sertraline Hcl") %>%
+  select(Year, Tot_Clms, GE65_Tot_Clms, GE65_Tot_Benes, Year) %>% 
+  arrange(desc(Tot_Clms))
+
+provider %>% 
+  filter(Prscrbr_NPI == "1972614519" & Gnrc_Name == "Sertraline Hcl") %>%
+  select(Year, Tot_Clms, GE65_Tot_Clms, GE65_Tot_Benes, Year) %>% 
+  arrange(desc(Tot_Clms))
+```
+
+(3) Celexa
+```{r}
+df3 <- provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide", Prscrbr_State_Abrvtn == "MO") %>%
+  group_by(Prscrbr_NPI) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+full_join(df3, dictionary, by = "Prscrbr_NPI")
+```
+Top three prescribers were Eric Barnes of Columbia (Prscrbr_NPI == "1619952520"; Geriatric Medicine), Abdullah	Arshad of Hayti	(Prscrbr_NPI == "1477660637"; Internal Medicine	), and  Fernando Cavero	of Sparta/Springfield	(Prscrbr_NPI == "1669545711"; Internal Medicine).
+
+```{r}
+provider %>% 
+  filter(Prscrbr_NPI == "1619952520" & Gnrc_Name == "Citalopram Hydrobromide") %>%
+  select(Year, Tot_Clms, GE65_Tot_Clms, GE65_Tot_Benes, Year) %>% 
+  arrange(desc(Tot_Clms))
+
+provider %>% 
+  filter(Prscrbr_NPI == "1477660637" & Gnrc_Name == "Citalopram Hydrobromide") %>%
+  select(Year, Tot_Clms, GE65_Tot_Clms, GE65_Tot_Benes, Year) %>% 
+  arrange(desc(Tot_Clms))
+
+provider %>% 
+  filter(Prscrbr_NPI == "1669545711" & Gnrc_Name == "Citalopram Hydrobromide") %>%
+  select(Year, Tot_Clms, GE65_Tot_Clms, GE65_Tot_Benes, Year) %>% 
+  arrange(desc(Tot_Clms))
+```
+There's an obvious drop in the prescriptions of Celexa.
+
+What about nationally?
+```{r}
+df4 <- provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl") %>%
+  group_by(Prscrbr_NPI) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+full_join(df4, dictionary, by = "Prscrbr_NPI")
+
+df5 <- provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl") %>%
+  group_by(Prscrbr_NPI) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+full_join(df5, dictionary, by = "Prscrbr_NPI")
+
+df6 <- provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide") %>%
+  group_by(Prscrbr_NPI) %>% 
+  summarise(tot = sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+full_join(df6, dictionary, by = "Prscrbr_NPI")
+```
+Some interesting findings:
+1. A lot of these top prescribers were in Puerto Rico.
+2. Earlier I found out most likely doctors to prescribe these drugs were family practice physicians and internal medicine physicians in Missouri, but in fact a lot of psychiatrists were making claims for all three drugs nationally.
+3. Eric Barnes was either the top 1 or top 2 prescribing geriatric doctors for all three drugs nationally.
+
+5. How much did these SSRIs cost (in general, by prescriber)?
+```{r}
+provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Drug_Cst)/sum(Tot_Day_Suply)*30)
+
+provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Drug_Cst)/sum(Tot_Day_Suply)*30)
+
+provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Drug_Cst)/sum(Tot_Day_Suply)*30)
+```
+For cost, I divided the total drug cost by the aggregate number of day’s supply and multiply the value with 30. So the numbers are the costs of a 30-day supply of a certain drug. They seem to be quite low because Medicare tends to cover "generic" versions of popular drugs like Prozac (so in some cases, Prozac might be more expensive than "Fluoxetine Hcl", but they're indeed the same drug.)
+
+Among the three SSRIs, Prozac was the most expensive, followed by Zoloft and Celexa (But again, Prozac was the least prescribed). The prices of the latter two drugs went down in 2021, but the price of Prozac went up.
+
+By provider:
+```{r}
+dfc1 <- provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Prscrbr_NPI) %>% 
+  summarise(tot = sum(Tot_Drug_Cst)/sum(Tot_Day_Suply)*30) %>% 
+  arrange(desc(tot))
+
+dfc2 <- provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Prscrbr_NPI) %>% 
+  summarise(tot = sum(Tot_Drug_Cst)/sum(Tot_Day_Suply)*30) %>% 
+  arrange(desc(tot))
+
+dfc3 <- provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Prscrbr_NPI) %>% 
+  summarise(tot = sum(Tot_Drug_Cst)/sum(Tot_Day_Suply)*30) %>% 
+  arrange(desc(tot))
+
+full_join(dfc1, dictionary, by = "Prscrbr_NPI")
+full_join(dfc2, dictionary, by = "Prscrbr_NPI")
+full_join(dfc3, dictionary, by = "Prscrbr_NPI")
+```
+SSRIs were the most expensive when prescribed by these providers: 
+(1) Prozac by Mohammad Choudhary of Rolla (Prscrbr_NPI == "1700836962"; Neurology), by Kelly	Mckinney of Saint Peters	(Prscrbr_NPI == "1376929760"; Nurse Practitioner)
+(2) Zoloft by John	Collins	of Kirksville	(Prscrbr_NPI == "1689659559"; Family Practice), by Laura Thiem of Adrian (Prscrbr_NPI == "1316941826"; Nurse Practitioner), and by Rodney Donham	of Joplin (Prscrbr_NPI == "1730155102"; Hospitalist)
+(3) Celexa by Robert	Sobule of Columbia (Prscrbr_NPI == "1053850180"; Physician Assistant).
+
+6. How much of these SSRIs were prescribed by psychiatrists?
+```{r}
+provider %>% 
+  distinct(Prscrbr_Type)
+```
+There were a number of specialties related to Psychiatry, such as "Psychiatry & Neurology," "Geriatric Psychiatry," "Psychologist, Clinical," "Neuropsychiatry." Physician assistant and nurse practitioners could prescribe SSRIs too. So here I examine just claims made under "Psychiatry," where psychiatric medications were "predominantly" claimed.
+
+```{r}
+totclm <- provider %>%
+  filter(Gnrc_Name == "Fluoxetine Hcl" | Gnrc_Name == "Sertraline Hcl" | Gnrc_Name == "Citalopram Hydrobromide") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Clms))
+
+psyclm <- provider %>% 
+  filter(Prscrbr_Type == "Psychiatry") %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl" | Gnrc_Name == "Sertraline Hcl" | Gnrc_Name == "Citalopram Hydrobromide") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Clms))
+
+full_join(totclm, psyclm, by = "Year") %>% 
+  mutate(pct = tot.y/tot.x)
+```
+
+```{r}
+mo_totclm <- provider %>%
+  filter(Gnrc_Name == "Fluoxetine Hcl" | Gnrc_Name == "Sertraline Hcl" | Gnrc_Name == "Citalopram Hydrobromide", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Clms))
+
+mo_psyclm <- provider %>% 
+  filter(Prscrbr_Type == "Psychiatry") %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl" | Gnrc_Name == "Sertraline Hcl" | Gnrc_Name == "Citalopram Hydrobromide", Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Year) %>% 
+  summarise(tot = sum(Tot_Clms))
+
+full_join(mo_totclm, mo_psyclm, by = "Year") %>% 
+  mutate(pct = tot.y/tot.x)
+```
+Both nationally and in Missouri, only about 10% of these SSRIs were prescribed by psychiatrists (doctors specializing in "Psychiatry").
+
+7. Who were making claims for elderly patients in Missouri?
+```{r}
+provider %>% 
+  filter(Prscrbr_State_Abrvtn == "MO") %>% 
+  group_by(Prscrbr_NPI) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(tot = sum(GE65_Tot_Clms)) %>% 
+  arrange(desc(tot))
+```
+Ranking:
+Eric Barnes of Columbia (Prscrbr_NPI == "1619952520"; Geriatric Medicine)
+Srinath Tadakamalla of Harrisonville	(Prscrbr_NPI == "1184691305"; Family Practice)
+Dennis	Drews of Columbia	(Prscrbr_NPI == "1972614519"; Internal Medicine)
+Arnold Tepper of Chesterfield	(Prscrbr_NPI == "1861449753"; Internal Medicine)
+Joy Cuezze of Lee's Summit (Prscrbr_NPI == "1912015389"; Family Practice/Internal Medicine)
+
+8. Was there an increase in the number of claims made for the elderly population in Missouri?
+```{r}
+provider %>% 
+  filter(Prscrbr_State_Abrvtn == "MO", Gnrc_Name == "Fluoxetine Hcl") %>% 
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(tot = sum(GE65_Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Prscrbr_State_Abrvtn == "MO", Gnrc_Name == "Sertraline Hcl") %>% 
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(tot = sum(GE65_Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Prscrbr_State_Abrvtn == "MO", Gnrc_Name == "Citalopram Hydrobromide") %>% 
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(tot = sum(GE65_Tot_Clms)) %>% 
+  arrange(desc(tot))
+```
+There was a slight increase in the number of claims for Prozac and Zoloft, but for Celexa, the number of claims went down.
+
+9. Was there an increase in the percentage of claims made for the elderly population in Missouri?
+```{r}
+provider %>% 
+  filter(Prscrbr_State_Abrvtn == "MO", Gnrc_Name == "Fluoxetine Hcl") %>% 
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(tot = sum(GE65_Tot_Clms)/sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Prscrbr_State_Abrvtn == "MO", Gnrc_Name == "Sertraline Hcl") %>% 
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(tot = sum(GE65_Tot_Clms)/sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+
+provider %>% 
+  filter(Prscrbr_State_Abrvtn == "MO", Gnrc_Name == "Citalopram Hydrobromide") %>% 
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(tot = sum(GE65_Tot_Clms)/sum(Tot_Clms)) %>% 
+  arrange(desc(tot))
+```
+Claims made for elderly patients were about just half of all the claims. There's an increase in the percentage of claims for Prozac for elderly patients.
+
+10. Are doctors changing the amounts of these SSRIs they're prescribing to their patients over the years?
+```{r}
+provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl", Prscrbr_State_Abrvtn == "MO") %>%
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(pct = sum(Tot_Day_Suply)/sum(Tot_Benes)) %>% 
+  arrange(desc(pct))
+
+provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl", Prscrbr_State_Abrvtn == "MO") %>%
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(pct = sum(Tot_Day_Suply)/sum(Tot_Benes)) %>% 
+  arrange(desc(pct))
+
+provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide", Prscrbr_State_Abrvtn == "MO") %>%
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(pct = sum(Tot_Day_Suply)/sum(Tot_Benes)) %>% 
+  arrange(desc(pct))
+```
+Doctors prescribed higher amounts of these SSRIs since Covid-19 in Missouri.
+
+```{r}
+provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl") %>%
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(pct = sum(Tot_Day_Suply)/sum(Tot_Benes)) %>% 
+  arrange(desc(pct))
+
+provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl") %>%
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(pct = sum(Tot_Day_Suply)/sum(Tot_Benes)) %>% 
+  arrange(desc(pct))
+
+provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide") %>%
+  group_by(Year) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(pct = sum(Tot_Day_Suply)/sum(Tot_Benes)) %>% 
+  arrange(desc(pct))
+```
+The same pattern emerged nationally.
+
+11. How many claims for SSRIs were made in Missouri in a year compare to other states (controling for population)?
+```{r}
+pop2020 <- get_decennial(geography = "state", variables = "P2_001N", year = 2020)
+
+Prozac <- geo %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl") %>% 
+  select(Prscrbr_Geo_Desc, Tot_Clms) %>% 
+  group_by(Prscrbr_Geo_Desc) %>% 
+  summarise(tot = sum(Tot_Clms))
+
+full_join(Prozac, pop2020, by=join_by(Prscrbr_Geo_Desc == NAME)) %>% 
+  select(Prscrbr_Geo_Desc, tot, value) %>% 
+  mutate(pct = tot/3/value*100000) %>% 
+  arrange(desc(pct))
+
+## Why tot/3/value*100000? I wanted to know the number of claims made each 100,000 people, but three years of prescriptions were included in tot.
+```
+
+```{r}
+Zoloft <- geo %>% 
+  filter(Gnrc_Name == "Sertraline Hcl") %>% 
+  select(Prscrbr_Geo_Desc, Tot_Clms) %>% 
+  group_by(Prscrbr_Geo_Desc) %>% 
+  summarise(tot = sum(Tot_Clms))
+
+full_join(Zoloft, pop2020, by=join_by(Prscrbr_Geo_Desc == NAME)) %>% 
+  select(Prscrbr_Geo_Desc, tot, value) %>% 
+  mutate(pct = tot/3/value*100000) %>% 
+  arrange(desc(pct))
+```
+
+```{r}
+Celexa <- geo %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide") %>% 
+  select(Prscrbr_Geo_Desc, Tot_Clms) %>% 
+  group_by(Prscrbr_Geo_Desc) %>% 
+  summarise(tot = sum(Tot_Clms))
+
+full_join(Celexa, pop2020, by=join_by(Prscrbr_Geo_Desc == NAME)) %>% 
+  select(Prscrbr_Geo_Desc, tot, value) %>% 
+  mutate(pct = tot/3/value*100000) %>% 
+  arrange(desc(pct))
+```
+
+10. How many of the claims for these SSRIs were for the elderly (above 65), and how does that compare to other states (controling for population)?
+```{r}
+elderly_pop <- get_acs(geography = "state", 
+                                    variables = c("B01001_020", "B01001_021", "B01001_022", "B01001_023", "B01001_024", "B01001_025", "B01001_044", "B01001_045", "B01001_046", "B01001_047", "B01001_048", "B01001_049"),
+                                    survey = "acs5", 
+                                    year = 2019)
+elderly_pop <- elderly_pop %>% 
+  group_by(NAME) %>% 
+  summarise(tot = sum(estimate))
+
+elderly_pop <- elderly_pop %>% mutate(Prscrbr_State_Abrvtn = case_when(
+           NAME == "Alabama" ~ "AL",
+           NAME == "Alaska" ~ "AK",
+           NAME == "Arizona" ~ "AZ",
+           NAME == "Arkansas" ~ "AR",
+           NAME == "American Samoa" ~ "AS",
+           NAME == "California" ~ "CA",
+           NAME == "Colorado" ~ "CO",
+           NAME == "Connecticut" ~ "CT",
+           NAME == "Delaware" ~ "DE",
+           NAME == "District of Columbia" ~ "DC",
+           NAME == "Florida" ~ "FL",
+           NAME == "Georgia" ~ "GA",
+           NAME == "Guam" ~ "GU",
+           NAME == "Hawaii" ~ "HI",
+           NAME == "Idaho" ~ "ID",
+           NAME == "Illinois" ~ "IL",
+           NAME == "Indiana" ~ "IN",
+           NAME == "Iowa" ~ "IA",
+           NAME == "Kansas" ~ "KS",
+           NAME == "Kentucky" ~ "KY",
+           NAME == "Louisiana" ~ "LA",
+           NAME == "Maine" ~ "ME",
+           NAME == "Maryland" ~ "MD",
+           NAME == "Massachusetts" ~ "MA",
+           NAME == "Michigan" ~ "MI",
+           NAME == "Minnesota" ~ "MN",
+           NAME == "Mississippi" ~ "MS",
+           NAME == "Missouri" ~ "MO",
+           NAME == "Montana" ~ "MT",
+           NAME == "Nebraska" ~ "NE",
+           NAME == "Nevada" ~ "NV",
+           NAME == "New Hampshire" ~ "NH",
+           NAME == "New Jersey" ~ "NJ",
+           NAME == "New Mexico" ~ "NM",
+           NAME == "New York" ~ "NY",
+           NAME == "North Carolina" ~ "NC",
+           NAME == "North Dakota" ~ "ND",
+           NAME == "Northern Mariana Islands" ~ "MP",
+           NAME == "Ohio" ~ "OH",
+           NAME == "Oklahoma" ~ "OK",
+           NAME == "Oregon" ~ "OR",
+           NAME == "Pennsylvania" ~ "PA",
+           NAME == "Puerto Rico" ~ "PR",
+           NAME == "Rhode Island" ~ "RI",
+           NAME == "South Carolina" ~ "SC",
+           NAME == "South Dakota" ~ "SD",
+           NAME == "Tennessee" ~ "TN",
+           NAME == "Texas" ~ "TX",
+           NAME == "Utah" ~ "UT",
+           NAME == "Vermont" ~ "VT",
+           NAME == "Virgin Islands" ~ "VI",
+           NAME == "Virginia" ~ "VA",
+           NAME == "Washington" ~ "WA",
+           NAME == "West Virginia" ~ "WV",
+           NAME == "Wisconsin" ~ "WI",
+           NAME == "Wyoming" ~ "WY",
+           TRUE ~ "NA"
+))
+```
+I here calculated the size of the elderly population (aged 65 and above) in each state using ACS data.
+
+```{r}
+GE_Prozac <- provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(clms = sum(GE65_Tot_Clms))
+
+full_join(GE_Prozac, elderly_pop, by = "Prscrbr_State_Abrvtn") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(pct = sum(clms/3/tot*100000)) %>% 
+  arrange(desc(pct))
+
+GE_Zoloft <- provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(clms = sum(GE65_Tot_Clms))
+
+full_join(GE_Zoloft, elderly_pop, by = "Prscrbr_State_Abrvtn") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(pct = sum(clms/3/tot*100000)) %>% 
+  arrange(desc(pct))
+
+GE_Celexa <- provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(clms = sum(GE65_Tot_Clms))
+
+full_join(GE_Celexa, elderly_pop, by = "Prscrbr_State_Abrvtn") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(pct = sum(clms/3/tot*100000)) %>% 
+  arrange(desc(pct))
+```
+
+12. How did the percentage of claims for the elderly population in Missouri compare with other states in the most recent year?
+
+```{r}
+provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl", Year == 2021) %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(pct = sum(GE65_Tot_Clms)/sum(Tot_Clms)) %>% 
+  arrange(desc(pct))
+
+provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl", Year == 2021) %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(pct = sum(GE65_Tot_Clms)/sum(Tot_Clms)) %>% 
+  arrange(desc(pct))
+
+provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide", Year == 2021) %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  replace(is.na(.), 0) %>% 
+  summarise(pct = sum(GE65_Tot_Clms)/sum(Tot_Clms)) %>% 
+  arrange(desc(pct))
+```
+I looked at all the years and found that in most states, about half of the claims for these SSRIs were for the elderly population. 
+
+13. How much did these SSRIs cost on average in Missorui, and how did the cost compare with other states?
+```{r}
+Prozac_supply <- provider %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(supply = sum(Tot_Day_Suply))
+  
+Prozac_fullcost <- geo %>% 
+  filter(Gnrc_Name == "Fluoxetine Hcl") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(fullcost = sum(Tot_Drug_Cst))
+
+full_join(Prozac_supply, Prozac_fullcost, by = "Prscrbr_State_Abrvtn") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(cost = fullcost/supply*30) %>% 
+  arrange(desc(cost))
+```
+Here I calculated the costs in the same way I did so above. Missouri ranked 41st in the cost of Prozac.
+
+```{r}
+Zoloft_supply <- provider %>% 
+  filter(Gnrc_Name == "Sertraline Hcl") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(supply = sum(Tot_Day_Suply))
+  
+Zoloft_fullcost <- geo %>% 
+  filter(Gnrc_Name == "Sertraline Hcl") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(fullcost = sum(Tot_Drug_Cst))
+
+full_join(Zoloft_supply, Zoloft_fullcost, by = "Prscrbr_State_Abrvtn") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(cost = fullcost/supply*30) %>% 
+  arrange(desc(cost))
+```
+Missouri ranked the 34th in the cost of Zoloft among 50 states.
+
+```{r}
+Celexa_supply <- provider %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(supply = sum(Tot_Day_Suply))
+  
+Celexa_fullcost <- geo %>% 
+  filter(Gnrc_Name == "Citalopram Hydrobromide") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(fullcost = sum(Tot_Drug_Cst))
+
+full_join(Celexa_supply, Celexa_fullcost, by = "Prscrbr_State_Abrvtn") %>% 
+  group_by(Prscrbr_State_Abrvtn) %>% 
+  summarise(cost = fullcost/supply*30) %>% 
+  arrange(desc(cost))
+```
+Missouri ranked the 38th in the cost of Celexa. Overall, cost of SSRIs seemed to be much lower than the national average.
